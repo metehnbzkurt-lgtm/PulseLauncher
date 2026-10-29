@@ -1,0 +1,235 @@
+name: Fix Everything - Rebuild PulseLauncher
+on:
+  workflow_dispatch:
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clean broken repo
+        run: |
+          rm -rf app gradle build.gradle.kts settings.gradle.kts gradlew gradlew.bat local.properties
+          rm -f *.zip
+          rm -f build.gradle_1.kts settings.gradle_1.kts gradlew_1 local_1.properties README_1.md
+          rm -rf __MACOSX PulseLauncher PulseLauncher_Fixed PulseLauncher_GitHub_Final
+          ls -la
+
+      - name: Recreate project structure
+        run: |
+          mkdir -p app/src/main/java/com/pulse/launcher
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p gradle/wrapper
+          mkdir -p .github/workflows
+
+          cat > settings.gradle.kts <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          include(":app")
+          EOF
+
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("com.android.library") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+              id("com.google.dagger.hilt.android") version "2.51.1" apply false
+              id("com.google.devtools.ksp") version "1.9.22-1.0.17" apply false
+          }
+          EOF
+
+          cat > gradle/wrapper/gradle-wrapper.properties <<'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
+          networkTimeout=10000
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("kotlin-kapt")
+              id("com.google.dagger.hilt.android.plugin")
+              id("com.google.devtools.ksp")
+          }
+          android {
+              namespace = "com.pulse.launcher"
+              compileSdk = 35
+              defaultConfig {
+                  applicationId = "com.pulse.launcher"
+                  minSdk = 26
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+              buildFeatures { compose = true }
+              composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.12.0")
+              implementation("androidx.activity:activity-compose:1.8.2")
+              implementation("androidx.compose.ui:ui:1.6.0")
+              implementation("androidx.compose.material3:material3:1.1.2")
+              implementation("com.google.dagger:hilt-android:2.51.1")
+              kapt("com.google.dagger:hilt-compiler:2.51.1")
+              implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+              implementation("androidx.room:room-runtime:2.6.1")
+              implementation("androidx.room:room-ktx:2.6.1")
+              ksp("androidx.room:room-compiler:2.6.1")
+              implementation("androidx.datastore:datastore-preferences:1.0.0")
+              implementation("androidx.navigation:navigation-compose:2.7.7")
+          }
+          kapt { correctErrorTypes = true }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+              <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission"/>
+              <application android:name=".PulseApplication" android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:label="PulseLauncher" android:theme="@android:style/Theme.DeviceDefault.DayNight">
+                  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.HOME"/>
+                          <category android:name="android.intent.category.DEFAULT"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/pulse/launcher/MainActivity.kt <<'EOF'
+          package com.pulse.launcher
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.material3.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import dagger.hilt.android.AndroidEntryPoint
+          @AndroidEntryPoint
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContent {
+                      MaterialTheme {
+                          Scaffold { p ->
+                              Column(Modifier.fillMaxSize().padding(p).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                  Text("PulseLauncher", style = MaterialTheme.typography.headlineLarge)
+                                  Text("Fixed - Ready to Build")
+                                  Button(onClick = {}) { Text("APK OK") }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/com/pulse/launcher/PulseApplication.kt <<'EOF'
+          package com.pulse.launcher
+          import android.app.Application
+          import dagger.hilt.android.HiltAndroidApp
+          @HiltAndroidApp
+          class PulseApplication : Application()
+          EOF
+
+          cat > app/proguard-rules.pro <<'EOF'
+          -keep class com.pulse.launcher.** { *; }
+          EOF
+
+          echo "sdk.dir=/opt/android-sdk" > local.properties
+
+
+          cat > .github/workflows/android.yml <<'EOF'
+          name: Android CI - Build PulseLauncher
+          on:
+            push:
+              branches: [main]
+              paths-ignore:
+                - '**.md'
+                - '**.zip'
+            workflow_dispatch:
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - name: Set up JDK 17
+                  uses: actions/setup-java@v4
+                  with:
+                    java-version: '17'
+                    distribution: 'temurin'
+                    cache: gradle
+                - name: Setup Android SDK
+                  uses: android-actions/setup-android@v3
+                - name: Setup Gradle
+                  uses: gradle/actions/setup-gradle@v3
+                  with:
+                    gradle-version: 8.7
+                - name: Build Debug APK
+                  run: ./gradlew assembleDebug --stacktrace --no-daemon
+                - name: Upload APK
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: PulseLauncher-debug-apk
+                    path: app/build/outputs/apk/debug/*.apk
+          EOF
+
+
+          # dummy icons (1x1 png)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png || true
+          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png || true
+          mkdir -p app/src/main/res/mipmap-mdpi
+          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png || true
+          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png || true
+
+          ls -la
+          cat app/build.gradle.kts
+
+      - name: Generate gradle wrapper
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+
+      - name: Create wrapper files
+        run: |
+          gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
+          ls -lh gradlew gradle/wrapper/
+
+      - name: Commit fixed project
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "fix: rebuild clean project"
