@@ -1,6 +1,8 @@
 name: Fix Everything - Rebuild PulseLauncher
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   rebuild:
@@ -97,8 +99,8 @@ jobs:
           dependencies {
               implementation("androidx.core:core-ktx:1.12.0")
               implementation("androidx.activity:activity-compose:1.8.2")
-              implementation("androidx.compose.ui:ui:1.6.0")
-              implementation("androidx.compose.material3:material3:1.1.2")
+              implementation("androidx.compose.ui:ui:1.6.8")
+              implementation("androidx.compose.material3:material3:1.2.1")
               implementation("com.google.dagger:hilt-android:2.51.1")
               kapt("com.google.dagger:hilt-compiler:2.51.1")
               implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
@@ -169,17 +171,11 @@ jobs:
           -keep class com.pulse.launcher.** { *; }
           EOF
 
-          echo "sdk.dir=/opt/android-sdk" > local.properties
-
-
           cat > .github/workflows/android.yml <<'EOF'
           name: Android CI - Build PulseLauncher
           on:
             push:
               branches: [main]
-              paths-ignore:
-                - '**.md'
-                - '**.zip'
             workflow_dispatch:
           jobs:
             build:
@@ -199,7 +195,9 @@ jobs:
                   with:
                     gradle-version: 8.7
                 - name: Build Debug APK
-                  run: ./gradlew assembleDebug --stacktrace --no-daemon
+                  run: |
+                    chmod +x gradlew
+                    ./gradlew assembleDebug --no-daemon
                 - name: Upload APK
                   uses: actions/upload-artifact@v4
                   with:
@@ -207,16 +205,18 @@ jobs:
                     path: app/build/outputs/apk/debug/*.apk
           EOF
 
-
-          # dummy icons (1x1 png)
-          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png || true
+          echo "sdk.dir=/opt/android-sdk" > local.properties
+          echo "[STRIPPED 92 bytes]" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png || echo > app/src/main/res/mipmap-hdpi/ic_launcher.png
           cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-hdpi/ic_launcher_round.png || true
           mkdir -p app/src/main/res/mipmap-mdpi
           cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png || true
           cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher_round.png || true
 
-          ls -la
-          cat app/build.gradle.kts
+      - name: Set up JDK 17 for wrapper
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Generate gradle wrapper
         uses: gradle/actions/setup-gradle@v3
@@ -225,9 +225,16 @@ jobs:
 
       - name: Create wrapper files
         run: |
-          gradle wrapper --gradle-version 8.7
+          ./gradlew --version || gradle --version
+          gradle wrapper --gradle-version 8.7 --no-daemon || ./gradlew wrapper --gradle-version 8.7 --no-daemon || true
           chmod +x gradlew
-          ls -lh gradlew gradle/wrapper/
+          ls -lh gradlew gradle/wrapper/ || true
+          # fallback: create minimal wrapper if generation failed
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Wrapper jar missing, downloading..."
+            mkdir -p gradle/wrapper
+            curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar || wget -O gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar || true
+          fi
 
       - name: Commit fixed project
         uses: stefanzweifel/git-auto-commit-action@v5
